@@ -7,11 +7,9 @@ class Sender:
 
     def __init__(self, address):
         self.address = address
-        self.send()
 
     def send(self):
-        message = ""
-        while message.upper() != "!Q":
+        while True:
             message = input(f"Input message for {self.address} 📨 >> ")
             self.sender.sendto(message.encode('utf-8'), self.address)
             try:
@@ -19,3 +17,8 @@ class Sender:
                 print(f"💻 {receiver_address} response: " + receiver_message.decode('utf-8'))
             except ConnectionResetError:
                 print(f"‼️ Error ‼️\n\t- Receiver is not alive")
+
+            if message.upper() in ["!Q", "!F", "!S"]:
+                break
+
+        return message.upper()
