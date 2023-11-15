@@ -18,8 +18,6 @@ class Receiver:
             if message.decode('utf-8').upper() == "!F":
                 print(f"\r💻 {sender_address} want to end communication: {message.decode('utf-8')}")
                 self.receiver.sendto("Got your request! Thank you and bye! 👋".encode('utf-8'), sender_address)
-                self.receiver.close()
-                break
             elif message.decode('utf-8').upper() == "!Q":
                 print(f"\r💻 {sender_address} quited connection: {message.decode('utf-8')}")
                 self.receiver.sendto("See you soon and bye! 👋".encode('utf-8'), sender_address)
@@ -34,4 +32,4 @@ class Receiver:
                 print(f"\rMessage from 💻 {sender_address} is: {message.decode('utf-8')}")
                 self.receiver.sendto("Got your message! Thank you! 👌".encode('utf-8'), sender_address)
 
-        return message.decode('utf-8').upper()
+        return message.decode('utf-8').upper(), self.address
