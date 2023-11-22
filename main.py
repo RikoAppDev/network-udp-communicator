@@ -35,15 +35,13 @@ if __name__ == '__main__':
                 # address = (DEFAULT_IP_ADDRESS, get_port())
                 address = (DEFAULT_IP_ADDRESS, DEFAULT_PORT)
 
-            try:
-                receiver = Receiver(address)
-                state, address = receiver.receive()
-            except OSError:
-                print(f"‼️ Error ‼️\n\t- Receiver with same config is already alive")
+            receiver = Receiver(address)
+            state, address = receiver.receive()
+
         elif mode == "2":
             if state != 6:
                 # address = (get_ip_address(), get_port(False))
-                address = ('192.168.0.69', 42069)
+                address = ('147.175.162.234', 42069)
             sender = Sender(address)
             while not sender.check_aliveness():
                 address = (address[0], get_port(False))

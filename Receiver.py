@@ -18,6 +18,7 @@ class Receiver:
         tag = None
         connected = False
         total_packets = None
+        filename = None
         correctly_received = 0
         failed_counter = 0
         received_data = []
@@ -28,7 +29,8 @@ class Receiver:
             elif tag != 8 and connected:
                 print(f"📡 Waiting for data on {format_address(self.address)} 🪢", end="")
 
-            sender_message, sender_address = self.receiver.recvfrom(1024)
+            # 1500 - 20 - 8 = 1472
+            sender_message, sender_address = self.receiver.recvfrom(1472)
             tag, amount_of_packets, data_size, crc, data = open_data(sender_message)
 
             new_crc = get_crc_value(tag, amount_of_packets, data_size, data)
@@ -72,7 +74,10 @@ class Receiver:
                     if tag == 3:
                         print(f"\rMessage from 💻 {format_address(sender_address)} is: {data.decode()}")
                     elif tag == 4:
-                        print(f"\rData from 💻 {format_address(sender_address)} are: {data.decode()}")
+                        if filename is None:
+                            received_data.clear()
+                            filename = data.decode()
+                        print(f"\rData from 💻 {format_address(sender_address)} are: {data}")
                     self.receiver.sendto(
                         DataHeader(5, "Got your message! Thank you! 👌".encode(), 1).pack_data(),
                         sender_address
@@ -87,13 +92,25 @@ class Receiver:
                 )
 
             if correctly_received == total_packets:
+                if tag == 4:
+                    print(f'\nStreaming data into {filename} ...', end="")
+
                 all_data = self.build_data(received_data)
 
                 if tag == 3:
                     print(f"\n📜 Received message is: {all_data.decode()}")
                     print(f"📏 Message size: {len(all_data)}B \n")
                 elif tag == 4:
-                    pass
+                    stream_data_into_file(filename, all_data)
+
+                    print(f"\n📜 File location is '{os.path.abspath(filename)}'")
+                    print(f"📏 File size: {len(all_data)}B \n")
+
+                total_packets = None
+                filename = None
+                correctly_received = 0
+                failed_counter = 0
+                received_data = []
 
         return tag, self.address
 

@@ -38,12 +38,28 @@ class Sender:
         return self.send_data(message, fragment_size)
 
     def send_file(self):
-        pass
+        fragment_size = handle_fragment_size_input()
+        file_path = handle_file_path_input()
 
-    def send_data(self, data, fragment_size):
+        with open(file_path, 'rb') as file:
+            data = file.read()
+            file.close()
+
+        return self.send_data(data, fragment_size, file_path.split('\\')[-1])
+
+    def send_data(self, data, fragment_size, file_name=None):
         amount_of_packets = math.ceil(len(data) / fragment_size)
 
-        print(f"\nℹ️ INFO:\n\t📏 Size of the data: {len(data)}B")
+        filename_length = None
+        filename_sent = False
+        data_length = len(data)
+
+        if file_name is not None:
+            filename_length = len(file_name.encode())
+            data = file_name.encode() + data
+            amount_of_packets += 1
+
+        print(f"\nℹ️ INFO:\n\t📏 Size of the data: {data_length}B")
         print(
             f"\t📦 Data was parsed into {amount_of_packets} packets\n" if amount_of_packets > 1 else f"\t📦 Data was packaged into 1 packet\n"
         )
@@ -54,15 +70,26 @@ class Sender:
         failed_counter = 0
 
         while len(data) != 0:
-            fractional_data = data[:fragment_size]
+            if file_name is not None and not filename_sent:
+                fractional_data = data[:filename_length]
+            else:
+                fractional_data = data[:fragment_size]
 
-            self.sender.sendto(DataHeader(3, fractional_data.encode(), amount_of_packets).pack_data(), self.address)
+            if file_name:
+                self.sender.sendto(DataHeader(4, fractional_data, amount_of_packets).pack_data(), self.address)
+            else:
+                self.sender.sendto(DataHeader(3, fractional_data.encode(), amount_of_packets).pack_data(), self.address)
+
             try:
                 receiver_message, receiver_address = self.sender.recvfrom(1024)
 
                 if open_data(receiver_message)[0] == 5:
                     packet_counter += 1
-                    data = data[fragment_size:]
+                    if file_name is not None and not filename_sent:
+                        data = data[filename_length:]
+                        filename_sent = True
+                    else:
+                        data = data[fragment_size:]
                     print(f"\t💻 {format_address(receiver_address)} 🔊 {open_data(receiver_message)[4].decode()}")
                     print(f"\t✅ Packet {packet_counter} was successfully sent 📭")
                 elif open_data(receiver_message)[0] == 0:
@@ -74,7 +101,12 @@ class Sender:
                 conn_lost = True
                 break
 
-        print(f"\n🧾 Summary:\n\t📦 Sent packets: {packet_counter}\n\t🔁 Retransmitted packets: {failed_counter}")
+        print(
+            f"\n🧾 Summary:\n"
+            f"\t📦 Sent packets: {packet_counter}\n"
+            f"\t🔁 Retransmitted packets: {failed_counter}\n"
+            f"\t📏 Size of the data: {data_length}B"
+        )
 
         return conn_lost
 

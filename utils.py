@@ -1,4 +1,5 @@
 import binascii
+import os
 import re
 import struct
 
@@ -74,15 +75,65 @@ def handle_send_input_type():
 
 def handle_fragment_size_input():
     while True:
-        size = input("📏 Input fragment size (max 65 500 B) >> ")
+        size = input("📏 Input fragment size (max 1461 B) >> ")
 
-        if size.isdigit():
-            if 0 < int(size) <= 65500:
+        # 1500 - 20 - 8 - 11 = 1461
+        if size.upper() in ["MAX", "M"]:
+            return 1461
+        elif size.isdigit():
+            if 0 < int(size) <= 1461:
                 return int(size)
             else:
-                print(f"‼️ Error ‼️\n\t- Fragment size is out of range (1 - 65500)")
+                print(f"‼️ Error ‼️\n\t- Fragment size is out of range (1 - 1461)")
         else:
             print(f"‼️ Error ‼️\n\t- Fragment size must be a number")
+
+
+# Finds file between project structure
+def find_file(file_name):
+    directory = os.path.dirname(os.path.abspath(__file__ or ''))
+
+    file_paths = []
+    for root, dirs, files in os.walk(directory):
+        if file_name in files:
+            file_paths.append(os.path.join(root, file_name))
+    return file_paths
+
+
+# Sets file name
+def get_file(file):
+    file_paths = find_file(file)
+    if len(file_paths) > 1:
+        print("⚠️ WARNING ⚠️\n\t- File found at the following locations within your project structure:")
+        for path in file_paths:
+            print("\t-", path)
+        print("\t- Make sure there are no file name duplicates! For now we selected first found!")
+        return True, file_paths[0]
+    elif len(file_paths) == 1:
+        return True, file_paths[0]
+
+    return False, None
+
+
+def handle_file_path_input():
+    while True:
+        file = input('Input filename >> ')
+        found, file_path = get_file(file)
+
+        if found:
+            return file_path
+        else:
+            print(f"‼️ Error ‼️\n\t- File {file} not found within your project structure!")
+
+
+def stream_data_into_file(file_name, data_to_stream):
+    with open(file_name, 'wb') as file:
+        try:
+            file.write(data_to_stream)
+            file.close()
+            print(f'\rData has been successfully streamed to {file_name}')
+        except Exception as exc:
+            print(f'\r‼️ Error ‼️\n\t- While streaming data to {file_name}, error: {exc}!!!')
 
 
 def format_address(address):
