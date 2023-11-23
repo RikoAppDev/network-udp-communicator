@@ -41,7 +41,7 @@ if __name__ == '__main__':
         elif mode == "2":
             if state != 6:
                 # address = (get_ip_address(), get_port(False))
-                address = ('147.175.162.234', 42069)
+                address = ('10.10.11.226', 42069)
             sender = Sender(address)
             while not sender.check_aliveness():
                 address = (address[0], get_port(False))

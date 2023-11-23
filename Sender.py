@@ -2,6 +2,8 @@ import math
 from socket import *
 from time import sleep
 
+from tqdm import tqdm
+
 from DataHeader import DataHeader
 from utils import *
 
@@ -32,50 +34,57 @@ class Sender:
                 return 7
 
     def send_text_message(self):
-        fragment_size = handle_fragment_size_input()
         message = input(f"📝 Input message for {format_address(self.address)} 📨 >> ")
-
-        return self.send_data(message, fragment_size)
+        return self.send_data(message)
 
     def send_file(self):
-        fragment_size = handle_fragment_size_input()
         file_path = handle_file_path_input()
 
         with open(file_path, 'rb') as file:
             data = file.read()
             file.close()
 
-        return self.send_data(data, fragment_size, file_path.split('\\')[-1])
+        return self.send_data(data, file_path.split('\\')[-1])
 
-    def send_data(self, data, fragment_size, file_name=None):
+    def send_data(self, data, filename=None):
+        fragment_size = handle_fragment_size_input()
+        show_progress_bar = handle_show_progress()
+
         amount_of_packets = math.ceil(len(data) / fragment_size)
 
         filename_length = None
         filename_sent = False
         data_length = len(data)
 
-        if file_name is not None:
-            filename_length = len(file_name.encode())
-            data = file_name.encode() + data
+        if filename is not None:
+            filename_length = len(filename.encode())
+            data = filename.encode() + data
             amount_of_packets += 1
 
-        print(f"\nℹ️ INFO:\n\t📏 Size of the data: {data_length}B")
+        print(f"\r\nℹ️ INFO:\n\t📏 Size of the data: {data_length}B")
         print(
             f"\t📦 Data was parsed into {amount_of_packets} packets\n" if amount_of_packets > 1 else f"\t📦 Data was packaged into 1 packet\n"
         )
         print("🪵 LOG:")
+
+        if show_progress_bar:
+            progress_bar = tqdm(
+                total=amount_of_packets,
+                desc=f"{f'📨 Sending file {filename}' if filename is not None else '📨 Sending message'}",
+                unit="B",
+            )
 
         conn_lost = False
         packet_counter = 0
         failed_counter = 0
 
         while len(data) != 0:
-            if file_name is not None and not filename_sent:
+            if filename is not None and not filename_sent:
                 fractional_data = data[:filename_length]
             else:
                 fractional_data = data[:fragment_size]
 
-            if file_name:
+            if filename:
                 self.sender.sendto(DataHeader(4, fractional_data, amount_of_packets).pack_data(), self.address)
             else:
                 self.sender.sendto(DataHeader(3, fractional_data.encode(), amount_of_packets).pack_data(), self.address)
@@ -84,18 +93,24 @@ class Sender:
                 receiver_message, receiver_address = self.sender.recvfrom(1024)
 
                 if open_data(receiver_message)[0] == 5:
+                    if show_progress_bar:
+                        progress_bar.update(1)
+
                     packet_counter += 1
-                    if file_name is not None and not filename_sent:
+                    if filename is not None and not filename_sent:
                         data = data[filename_length:]
                         filename_sent = True
                     else:
                         data = data[fragment_size:]
-                    print(f"\t💻 {format_address(receiver_address)} 🔊 {open_data(receiver_message)[4].decode()}")
-                    print(f"\t✅ Packet {packet_counter} was successfully sent 📭")
+
+                    if not show_progress_bar:
+                        print(f"\t💻 {format_address(receiver_address)} 🔊 {open_data(receiver_message)[4].decode()}")
+                        print(f"\t✅ Packet {packet_counter} was successfully sent 📭")
                 elif open_data(receiver_message)[0] == 0:
                     failed_counter += 1
-                    print(f"\t💻 {format_address(receiver_address)} 🔊 {open_data(receiver_message)[4].decode()}")
-                    print(f"\t🔁 Packet {packet_counter} will be retransmitted 📬")
+                    if not show_progress_bar:
+                        print(f"\t💻 {format_address(receiver_address)} 🔊 {open_data(receiver_message)[4].decode()}")
+                        print(f"\t🔁 Packet {packet_counter} will be retransmitted 📬")
             except ConnectionResetError:
                 print(f"⚠️ Warning ⚠️\n\t- Receiver is not alive, connection lost")
                 conn_lost = True

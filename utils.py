@@ -78,7 +78,7 @@ def handle_fragment_size_input():
         size = input("📏 Input fragment size (max 1461 B) >> ")
 
         # 1500 - 20 - 8 - 11 = 1461
-        if size.upper() in ["MAX", "M"]:
+        if size.upper().strip() in ["MAX", "M"]:
             return 1461
         elif size.isdigit():
             if 0 < int(size) <= 1461:
@@ -87,6 +87,16 @@ def handle_fragment_size_input():
                 print(f"‼️ Error ‼️\n\t- Fragment size is out of range (1 - 1461)")
         else:
             print(f"‼️ Error ‼️\n\t- Fragment size must be a number")
+
+
+def handle_show_progress():
+    while True:
+        progress = input("⌛ Do you want to show progress bar instead log? >> ")
+
+        if progress.lower().strip() in ["y", "yes", "1"]:
+            return True
+        else:
+            return False
 
 
 # Finds file between project structure
@@ -106,7 +116,7 @@ def get_file(file):
     if len(file_paths) > 1:
         print("⚠️ WARNING ⚠️\n\t- File found at the following locations within your project structure:")
         for path in file_paths:
-            print("\t-", path)
+            print("\t\t-", path)
         print("\t- Make sure there are no file name duplicates! For now we selected first found!")
         return True, file_paths[0]
     elif len(file_paths) == 1:
@@ -117,7 +127,7 @@ def get_file(file):
 
 def handle_file_path_input():
     while True:
-        file = input('Input filename >> ')
+        file = input("📂 Input filename >> ")
         found, file_path = get_file(file)
 
         if found:

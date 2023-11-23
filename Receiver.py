@@ -1,6 +1,8 @@
 import threading
 from socket import *
 
+from tqdm import tqdm
+
 from DataHeader import DataHeader
 from utils import *
 
@@ -8,11 +10,13 @@ from utils import *
 class Receiver:
     address: tuple
     receiver: socket
+    show_progress_bar: bool
 
     def __init__(self, address):
         self.address = address
         self.receiver = socket(AF_INET, SOCK_DGRAM)
         self.receiver.bind(address)
+        self.show_progress_bar = handle_show_progress()
 
     def receive(self):
         tag = None
@@ -21,12 +25,13 @@ class Receiver:
         filename = None
         correctly_received = 0
         failed_counter = 0
-        received_data = []
+        received_data = b""
+        progress_bar = None
 
         while True:
             if tag != 8 and not connected:
                 print(f"📡 Waiting for connection on {format_address(self.address)} 🪢", end="")
-            elif tag != 8 and connected:
+            elif tag != 8 and connected and total_packets is None:
                 print(f"📡 Waiting for data on {format_address(self.address)} 🪢", end="")
 
             # 1500 - 20 - 8 = 1472
@@ -66,25 +71,37 @@ class Receiver:
                 # Basic data
                 else:
                     correctly_received += 1
-                    received_data.append(data)
+                    received_data += data
 
                     if total_packets is None:
                         total_packets = amount_of_packets
+                        if self.show_progress_bar:
+                            progress_bar = tqdm(total=total_packets, colour='', unit="B")
+
+                    if self.show_progress_bar:
+                        progress_bar.update(1)
 
                     if tag == 3:
-                        print(f"\rMessage from 💻 {format_address(sender_address)} is: {data.decode()}")
+                        if self.show_progress_bar:
+                            progress_bar.desc = "📡 Receiving message"
+                        else:
+                            print(f"\rMessage from 💻 {format_address(sender_address)} is: {data.decode()}")
                     elif tag == 4:
                         if filename is None:
-                            received_data.clear()
+                            received_data = b""
                             filename = data.decode()
-                        print(f"\rData from 💻 {format_address(sender_address)} are: {data}")
+                            if self.show_progress_bar:
+                                progress_bar.desc = f"📡 Receiving file {filename}"
+                        if not self.show_progress_bar:
+                            print(f"\rData from 💻 {format_address(sender_address)} are: {data}")
                     self.receiver.sendto(
                         DataHeader(5, "Got your message! Thank you! 👌".encode(), 1).pack_data(),
                         sender_address
                     )
             else:
                 failed_counter += 1
-                print(f"\rData from 💻 {format_address(sender_address)} was rejected 🛂⛔")
+                if not self.show_progress_bar:
+                    print(f"\rData from 💻 {format_address(sender_address)} was rejected 🛂⛔")
                 print(tag, amount_of_packets, data_size, crc, data)
                 self.receiver.sendto(
                     DataHeader(0, "Got corrupted packet! It needs to be retransmitted! 🛂".encode(), 1).pack_data(),
@@ -92,36 +109,28 @@ class Receiver:
                 )
 
             if correctly_received == total_packets:
+                if self.show_progress_bar:
+                    progress_bar.close()
+
                 if tag == 4:
                     print(f'\nStreaming data into {filename} ...', end="")
 
-                all_data = self.build_data(received_data)
-
                 if tag == 3:
-                    print(f"\n📜 Received message is: {all_data.decode()}")
-                    print(f"📏 Message size: {len(all_data)}B \n")
+                    print(f"\n\n📄 Received message is: {received_data.decode()}")
+                    print(f"📏 Message size: {len(received_data)}B \n")
                 elif tag == 4:
-                    stream_data_into_file(filename, all_data)
+                    stream_data_into_file(filename, received_data)
 
-                    print(f"\n📜 File location is '{os.path.abspath(filename)}'")
-                    print(f"📏 File size: {len(all_data)}B \n")
+                    print(f"\n🗃️ File location is '{os.path.abspath(filename)}'")
+                    print(f"📏 File size: {len(received_data)}B \n")
 
                 total_packets = None
                 filename = None
                 correctly_received = 0
                 failed_counter = 0
-                received_data = []
+                received_data = b""
 
         return tag, self.address
-
-    @staticmethod
-    def build_data(received_data):
-        data: bytes = b""
-
-        for d in received_data:
-            data += d
-
-        return data
 
     def handle_keep_alive(self):
         while True:
