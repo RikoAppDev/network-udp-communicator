@@ -1,4 +1,5 @@
 import math
+import random
 from socket import *
 from time import sleep
 
@@ -48,6 +49,7 @@ class Sender:
 
     def send_data(self, data, filename=None):
         fragment_size = handle_fragment_size_input()
+        error_sim = handle_error_sim_input()
         show_progress_bar = handle_show_progress()
 
         amount_of_packets = math.ceil(len(data) / fragment_size)
@@ -72,6 +74,7 @@ class Sender:
                 total=amount_of_packets,
                 desc=f"{f'📨 Sending file {filename}' if filename is not None else '📨 Sending message'}",
                 unit="B",
+                unit_scale=True
             )
 
         conn_lost = False
@@ -85,9 +88,11 @@ class Sender:
                 fractional_data = data[:fragment_size]
 
             if filename:
-                self.sender.sendto(DataHeader(4, fractional_data, amount_of_packets).pack_data(), self.address)
+                self.sender.sendto(DataHeader(4, fractional_data, amount_of_packets)
+                                   .pack_data(random.randrange(0, 100) < error_sim), self.address)
             else:
-                self.sender.sendto(DataHeader(3, fractional_data.encode(), amount_of_packets).pack_data(), self.address)
+                self.sender.sendto(DataHeader(3, fractional_data.encode(), amount_of_packets)
+                                   .pack_data(random.randrange(0, 100) < error_sim), self.address)
 
             try:
                 receiver_message, receiver_address = self.sender.recvfrom(1024)
@@ -118,7 +123,7 @@ class Sender:
 
         print(
             f"\n🧾 Summary:\n"
-            f"\t📦 Sent packets: {packet_counter}\n"
+            f"\t📦 All sent packets: {packet_counter + failed_counter}\n"
             f"\t🔁 Retransmitted packets: {failed_counter}\n"
             f"\t📏 Size of the data: {data_length}B"
         )

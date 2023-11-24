@@ -76,7 +76,7 @@ class Receiver:
                     if total_packets is None:
                         total_packets = amount_of_packets
                         if self.show_progress_bar:
-                            progress_bar = tqdm(total=total_packets, colour='', unit="B")
+                            progress_bar = tqdm(total=total_packets, unit="B", unit_scale=True)
 
                     if self.show_progress_bar:
                         progress_bar.update(1)
@@ -101,8 +101,8 @@ class Receiver:
             else:
                 failed_counter += 1
                 if not self.show_progress_bar:
-                    print(f"\rData from 💻 {format_address(sender_address)} was rejected 🛂⛔")
-                print(tag, amount_of_packets, data_size, crc, data)
+                    print(f"\rPacket from 💻 {format_address(sender_address)} was rejected 🛂⛔")
+                    print("\t📦 Packet data -", tag, amount_of_packets, data_size, crc, data)
                 self.receiver.sendto(
                     DataHeader(0, "Got corrupted packet! It needs to be retransmitted! 🛂".encode(), 1).pack_data(),
                     sender_address

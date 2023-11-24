@@ -5,10 +5,10 @@ import struct
 
 
 def select_mode():
-    mode = input("\n⚙️ Choose operation mode: 📡 RECEIVER ➡ 1️⃣ | 📨 SENDER ➡ 2️⃣ >> ")
+    mode = input("\n⚙️ Choose operation mode: 📡 RECEIVER ➡ 1️⃣ | 📨 SENDER ➡ 2️⃣ >> ").strip()
     while mode != "1" and mode != "2":
         print(f"‼️ Error ‼️\n\t- Incorrect operation mode")
-        mode = input("\n⚙️ Choose operation mode: 📡 RECEIVER ➡ 1️⃣ | 📨 SENDER ➡ 2️⃣ >> ")
+        mode = input("\n⚙️ Choose operation mode: 📡 RECEIVER ➡ 1️⃣ | 📨 SENDER ➡ 2️⃣ >> ").strip()
 
     return mode
 
@@ -39,7 +39,7 @@ def handle_port_input(text):
     while True:
         port = input(text)
 
-        if port.isdigit():
+        if port.strip().isdigit():
             if 0 < int(port) < 64536:
                 return int(port)
             else:
@@ -66,7 +66,7 @@ def handle_send_input_type():
             "\t3️⃣ Swap modes 🔄️\n"
             "\t4️⃣ End communication 💔\n"
             ">> "
-        )
+        ).strip()
         if task in ["1", "2", "3", "4"]:
             return task
         else:
@@ -75,10 +75,10 @@ def handle_send_input_type():
 
 def handle_fragment_size_input():
     while True:
-        size = input("📏 Input fragment size (max 1461 B) >> ")
+        size = input("📏 Input fragment size (max 1461 B) >> ").strip()
 
         # 1500 - 20 - 8 - 11 = 1461
-        if size.upper().strip() in ["MAX", "M"]:
+        if size.upper() in ["MAX", "M"]:
             return 1461
         elif size.isdigit():
             if 0 < int(size) <= 1461:
@@ -87,6 +87,19 @@ def handle_fragment_size_input():
                 print(f"‼️ Error ‼️\n\t- Fragment size is out of range (1 - 1461)")
         else:
             print(f"‼️ Error ‼️\n\t- Fragment size must be a number")
+
+
+def handle_error_sim_input():
+    while True:
+        error_probability = input("🎲 Choose percentual error probability >> ").strip()
+
+        if error_probability.isdigit():
+            if 0 <= int(error_probability) <= 80:
+                return int(error_probability)
+            else:
+                print(f"‼️ Error ‼️\n\t- Error probability is out of range (0 - 80)")
+        else:
+            print(f"‼️ Error ‼️\n\t- Error probability must be a number")
 
 
 def handle_show_progress():
@@ -127,7 +140,7 @@ def get_file(file):
 
 def handle_file_path_input():
     while True:
-        file = input("📂 Input filename >> ")
+        file = input("📂 Input filename >> ").strip()
         found, file_path = get_file(file)
 
         if found:

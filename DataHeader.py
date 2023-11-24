@@ -30,9 +30,16 @@ class DataHeader:
         self.data = data
         self.amount_of_packets = amount_of_packets
 
-    def pack_data(self):
+    def pack_data(self, error_sim=False):
         header = struct.pack("!BII", self.tag, self.amount_of_packets, self.data_size)
         crc = binascii.crc_hqx(header + self.data, 0)
+        if error_sim:
+            crc = self.simulate_crc_error(crc, 2)
         header += struct.pack("!H", crc)
 
         return header + self.data
+
+    @staticmethod
+    def simulate_crc_error(crc, num_bits_to_flip):
+        bitmask = (1 << num_bits_to_flip)
+        return crc ^ bitmask
