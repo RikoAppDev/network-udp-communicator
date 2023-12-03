@@ -1,13 +1,10 @@
 import socket
-import threading
 
 from utils import *
 from Receiver import Receiver
 from Sender import Sender
 
 DEFAULT_IP_ADDRESS = socket.gethostbyname(socket.gethostname())
-DEFAULT_PORT = 42069
-DEFAULT_ADDRESS = (DEFAULT_IP_ADDRESS, DEFAULT_PORT)
 wanna_terminate = False
 
 if __name__ == '__main__':
@@ -16,10 +13,11 @@ if __name__ == '__main__':
     state = None
     mode = None
     address = (None, None)
+    sender_address = (None, None)
     while not wanna_terminate:
-        if state != 6:
+        if state != 'S':
             mode = select_mode()
-        elif state == 6:
+        elif state == 'S':
             if mode == "1":
                 mode = "2"
             else:
@@ -31,24 +29,34 @@ if __name__ == '__main__':
             print("\nMODE 2️⃣ ➡ SENDER 📨")
 
         if mode == "1":
-            if state != 6:
-                # address = (DEFAULT_IP_ADDRESS, get_port())
-                address = (DEFAULT_IP_ADDRESS, DEFAULT_PORT)
+            if state != 'S':
+                address = (DEFAULT_IP_ADDRESS, get_port())
+            else:
+                address = (DEFAULT_IP_ADDRESS, address[1])
 
-            receiver = Receiver(address)
-            state, address = receiver.receive()
-
+            try:
+                receiver = Receiver(address)
+                state, sender_address = receiver.receive()
+            except OSError:
+                print(f"‼️ Error ‼️\n\t- Receiver with the same config is already alive")
         elif mode == "2":
-            if state != 6:
-                # address = (get_ip_address(), get_port(False))
-                address = ('192.168.0.69', 42069)
-            sender = Sender(address)
-            while not sender.check_aliveness():
-                address = (address[0], get_port(False))
-                sender = Sender(address)
+            if state != 'S':
+                address = (get_ip_address(), get_port(False))
+            else:
+                address = (sender_address[0], address[1])
 
-            # keep_alive_thread = threading.Thread(target=sender.keep_alive, daemon=True).start()
+            sender = Sender(address)
+            input_wrong_address = 0
+            while not sender.check_aliveness():
+                if input_wrong_address < 2:
+                    address = (address[0], get_port(False))
+                else:
+                    address = (get_ip_address(), get_port(False))
+                    input_wrong_address = 0
+
+                sender = Sender(address)
+                input_wrong_address += 1
 
             state = sender.send()
-            if state == 7:
+            if state == 'Q':
                 wanna_terminate = True

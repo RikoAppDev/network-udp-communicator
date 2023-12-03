@@ -2,6 +2,9 @@ import binascii
 import os
 import re
 import struct
+from timeit import default_timer as timer
+
+import keyboard
 
 
 def select_mode():
@@ -75,16 +78,16 @@ def handle_send_input_type():
 
 def handle_fragment_size_input():
     while True:
-        size = input("📏 Input fragment size (max 1461 B) >> ").strip()
+        size = input("📏 Input fragment size (max 1467 B) >> ").strip()
 
-        # 1500 - 20 - 8 - 11 = 1461
+        # 1500 - 20 - 8 - 5 = 1467
         if size.upper() in ["MAX", "M"]:
-            return 1461
+            return 1467
         elif size.isdigit():
-            if 0 < int(size) <= 1461:
+            if 0 < int(size) <= 1467:
                 return int(size)
             else:
-                print(f"‼️ Error ‼️\n\t- Fragment size is out of range (1 - 1461)")
+                print(f"‼️ Error ‼️\n\t- Fragment size is out of range (1 - 1467)")
         else:
             print(f"‼️ Error ‼️\n\t- Fragment size must be a number")
 
@@ -149,14 +152,17 @@ def handle_file_path_input():
             print(f"‼️ Error ‼️\n\t- File {file} not found within your project structure!")
 
 
-def stream_data_into_file(file_name, data_to_stream):
-    with open(file_name, 'wb') as file:
+def stream_data_into_file(path, filename, data_to_stream):
+    with open(path + filename, 'wb') as file:
         try:
             file.write(data_to_stream)
             file.close()
-            print(f'\rData has been successfully streamed to {file_name}')
+            print(f'\rData has been successfully streamed to {filename}')
+
+            print(f"\n🗃️ File location is '{os.path.abspath(path + filename)}'")
+            print(f"📏 File size: {len(data_to_stream)}B \n")
         except Exception as exc:
-            print(f'\r‼️ Error ‼️\n\t- While streaming data to {file_name}, error: {exc}!!!')
+            print(f'\r‼️ Error ‼️\n\t- While streaming data to {filename}, error: {exc}!!!')
 
 
 def format_address(address):
@@ -164,11 +170,103 @@ def format_address(address):
 
 
 def open_data(header_data):
-    tag, amount_of_packets, data_size, crc = struct.unpack('!BIIH', header_data[:11])
-    data = header_data[11:11 + data_size]
-    return tag, amount_of_packets, data_size, crc, data
+    flags, seq_number, crc = struct.unpack('!BHH', header_data[:5])
+    data = header_data[5:]
+    return flags, seq_number, crc, data
 
 
-def get_crc_value(tag, amount_of_packets, data_size, data):
-    header = struct.pack("!BII", tag, amount_of_packets, data_size)
+def get_crc_value(flags, seq_number, data):
+    header = struct.pack("!BH", flags, seq_number)
     return binascii.crc_hqx(header + data, 0)
+
+
+def contain_flags(flags, flags_to_check):
+    if flags is None:
+        return False
+
+    flag_positions = {
+        'E': 7,
+        'T': 6,
+        'F': 5,
+        'A': 4,
+        'R': 3,
+        'S': 2,
+        'Q': 1,
+        'K': 0,
+    }
+
+    for flag in flags_to_check:
+        position = flag_positions.get(flag)
+        if not (flags & (1 << position)):
+            return False
+
+    return True
+
+
+def match_flags(flags, flags_to_match):
+    flag_positions = {
+        'E': 7,
+        'T': 6,
+        'F': 5,
+        'A': 4,
+        'R': 3,
+        'S': 2,
+        'Q': 1,
+        'K': 0,
+    }
+
+    # Convert the flags_to_match string into a set of flag positions
+    positions_to_match = {flag_positions[flag]: flag for flag in flags_to_match}
+
+    # Check if the specified flags are present and others are absent
+    return all((flags & (1 << position)) != 0 if position in positions_to_match else (flags & (1 << position)) == 0 for
+               position in flag_positions.values())
+
+
+def print_error_connection_reset(device=1):
+    if device:
+        print(f"\n‼️ Error ‼️\n\t- RECEIVER is not alive anymore")
+    else:
+        print(f"\n‼️ Error ‼️\n\t- SENDER is not alive anymore")
+
+
+def print_error_timout(device=1):
+    if device:
+        print(f"\r‼️ Error ‼️\n\t- RECEIVER is not responding")
+    else:
+        print(f"\r‼️ Error ‼️\n\t- SENDER is not responding")
+
+
+def handle_wait_for_server_setup():
+    start = timer()
+    print(
+        f"Wait some time to setup the RECEIVER or press SPACE key to try connect now..."
+    )
+    while timer() - start < 30:
+        print(f"\rConnecting in {30 - int(timer() - start)}s", end="")
+
+        if keyboard.is_pressed("space"):
+            break
+
+
+def get_file_save_path():
+    default_path = "./received_files"
+
+    while True:
+        user_input = input(
+            f"🗃️ Enter the directory to save the file (Enter for default: './received_files') >> "
+        ).strip()
+
+        if user_input == "":
+            user_input = default_path
+
+        if not user_input.endswith("/"):
+            user_input += "/"
+
+        if not os.path.exists(user_input):
+            os.makedirs(user_input)
+
+        if os.path.isdir(user_input):
+            return user_input
+        else:
+            print("\r‼️ Error ‼️\n\t- Invalid path. Please enter a valid directory.")

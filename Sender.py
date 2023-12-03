@@ -1,5 +1,7 @@
 import math
 import random
+import socket
+from threading import Thread
 from socket import *
 from time import sleep
 
@@ -12,15 +14,19 @@ from utils import *
 class Sender:
     address: tuple
     sender: socket
+    KEEP_ALIVE_THREAD_STATUS: bool
 
     def __init__(self, address):
         self.address = address
         self.sender = socket(AF_INET, SOCK_DGRAM)
+        self.KEEP_ALIVE_THREAD_STATUS = False
+        self.RECEIVER_SWAP_INITIALISATION = False
 
     def send(self):
         while True:
             task = handle_send_input_type()
 
+            self.KEEP_ALIVE_THREAD_STATUS = False
             if task == "1":
                 if self.send_text_message():
                     break
@@ -28,11 +34,15 @@ class Sender:
                 if self.send_file():
                     break
             elif task == "3":
-                self.send_swap_request()
-                return 6
+                if self.send_swap_request():
+                    return 'S'
+                else:
+                    break
             elif task == "4":
-                self.send_fin_request()
-                return 7
+                if self.send_fin_request():
+                    return 'Q'
+                else:
+                    break
 
     def send_text_message(self):
         message = input(f"📝 Input message for {format_address(self.address)} 📨 >> ")
@@ -78,7 +88,7 @@ class Sender:
             )
 
         conn_lost = False
-        packet_counter = 0
+        seq_number = 0
         failed_counter = 0
 
         while len(data) != 0:
@@ -88,20 +98,25 @@ class Sender:
                 fractional_data = data[:fragment_size]
 
             if filename:
-                self.sender.sendto(DataHeader(4, fractional_data, amount_of_packets)
-                                   .pack_data(random.randrange(0, 100) < error_sim), self.address)
+                self.sender.sendto(
+                    DataHeader('F' if seq_number < amount_of_packets - 1 else 'FQ', fractional_data, seq_number)
+                    .pack_data(random.randrange(0, 100) < error_sim), self.address
+                )
             else:
-                self.sender.sendto(DataHeader(3, fractional_data.encode(), amount_of_packets)
-                                   .pack_data(random.randrange(0, 100) < error_sim), self.address)
+                self.sender.sendto(
+                    DataHeader('T' if seq_number < amount_of_packets - 1 else 'TQ', fractional_data.encode(),
+                               seq_number)
+                    .pack_data(random.randrange(0, 100) < error_sim), self.address
+                )
 
             try:
                 receiver_message, receiver_address = self.sender.recvfrom(1024)
+                flags, _, _, d = open_data(receiver_message)
 
-                if open_data(receiver_message)[0] == 5:
+                if contain_flags(flags, 'A'):
                     if show_progress_bar:
                         progress_bar.update(1)
 
-                    packet_counter += 1
                     if filename is not None and not filename_sent:
                         data = data[filename_length:]
                         filename_sent = True
@@ -109,58 +124,141 @@ class Sender:
                         data = data[fragment_size:]
 
                     if not show_progress_bar:
-                        print(f"\t💻 {format_address(receiver_address)} 🔊 {open_data(receiver_message)[4].decode()}")
-                        print(f"\t✅ Packet {packet_counter} was successfully sent 📭")
-                elif open_data(receiver_message)[0] == 0:
+                        print(f"\t💻 {format_address(receiver_address)} 🔊 {d.decode()}")
+                        print(f"\t✅ Packet {seq_number} was successfully sent 📭")
+
+                    seq_number += 1
+                elif contain_flags(flags, 'R'):
                     failed_counter += 1
                     if not show_progress_bar:
-                        print(f"\t💻 {format_address(receiver_address)} 🔊 {open_data(receiver_message)[4].decode()}")
-                        print(f"\t🔁 Packet {packet_counter} will be retransmitted 📬")
+                        print(f"\t💻 {format_address(receiver_address)} 🔊 {d.decode()}")
+                        print(f"\t🔁 Packet {seq_number} will be retransmitted 📬")
             except ConnectionResetError:
-                print(f"⚠️ Warning ⚠️\n\t- Receiver is not alive, connection lost")
+                print_error_connection_reset(2)
                 conn_lost = True
                 break
 
         print(
             f"\n🧾 Summary:\n"
-            f"\t📦 All sent packets: {packet_counter + failed_counter}\n"
+            f"\t📦 All sent packets: {seq_number + failed_counter}\n"
             f"\t🔁 Retransmitted packets: {failed_counter}\n"
             f"\t📏 Size of the data: {data_length}B"
         )
 
+        self.KEEP_ALIVE_THREAD_STATUS = True
+        Thread(target=self.keep_alive, daemon=True).start()
+
         return conn_lost
 
     def send_swap_request(self):
-        self.sender.sendto(DataHeader(6, "SWAP".encode(), 1).pack_data(), self.address)
+        self.sender.sendto(DataHeader('S', "SWAP".encode(), 0).pack_data(), self.address)
         try:
             receiver_message, receiver_address = self.sender.recvfrom(1024)
-            print(f"💻 {format_address(receiver_address)} 🔊 {open_data(receiver_message)[4].decode()}")
+            flags, packet_number, crc, data = open_data(receiver_message)
+            if contain_flags(flags, 'SA'):
+                print(f"💻 {format_address(receiver_address)} 🔊 {data.decode()}")
+                return True
         except ConnectionResetError:
-            print(f"⚠️ Warning ⚠️\n\t- Receiver is not alive, connection lost")
-
-    def send_fin_request(self):
-        self.sender.sendto(DataHeader(7, "FIN".encode(), 1).pack_data(), self.address)
-        try:
-            receiver_message, receiver_address = self.sender.recvfrom(1024)
-            print(f"💻 {format_address(receiver_address)} 🔊 {open_data(receiver_message)[4].decode()}")
-        except ConnectionResetError:
-            print(f"⚠️ Warning ⚠️\n\t- Receiver is not alive, connection lost")
-
-    def check_aliveness(self):
-        sleep(.5)
-        self.sender.sendto(DataHeader(2, "Are you alive?".encode(), 1).pack_data(), self.address)
-
-        try:
-            receiver_message, receiver_address = self.sender.recvfrom(1024)
-            tag, packet_number, data_size, crc, data = open_data(receiver_message)
-            print(f"Connected to 💻 {format_address(receiver_address)} 🔊 {data.decode()}")
-        except ConnectionResetError:
-            print(f"‼️ Error ‼️\n\t- Receiver is not alive")
+            print_error_connection_reset(2)
+            return False
+        except TimeoutError:
+            print_error_timout(2)
             return False
 
-        return True
+    def send_fin_request(self):
+        self.sender.sendto(DataHeader('Q', "FIN".encode(), 0).pack_data(), self.address)
+        try:
+            receiver_message, receiver_address = self.sender.recvfrom(1024)
+            flags, packet_number, crc, data = open_data(receiver_message)
+
+            if contain_flags(flags, 'QA'):
+                print(f"💻 {format_address(receiver_address)} 🔊 {data.decode()}")
+                return True
+        except ConnectionResetError:
+            print_error_connection_reset(2)
+            return False
+        except TimeoutError:
+            print_error_timout(2)
+            return False
+
+    def check_aliveness(self, reestablish=False):
+        if not reestablish:
+            handle_wait_for_server_setup()
+
+        if not reestablish:
+            print("\rEstablishing connection...", end="")
+        sleep(.5)
+        self.sender.settimeout(10)
+        self.sender.sendto(DataHeader('E', "Are you alive?".encode(), 0).pack_data(), self.address)
+
+        try:
+            receiver_message, receiver_address = self.sender.recvfrom(1024)
+            flags, packet_number, crc, data = open_data(receiver_message)
+            if contain_flags(flags, 'EA'):
+                if reestablish:
+                    print(f"\rConnection reestablished with 💻 {format_address(receiver_address)} 🔊 {data.decode()}")
+                else:
+                    print(f"\rConnected to 💻 {format_address(receiver_address)} 🔊 {data.decode()}")
+
+                self.KEEP_ALIVE_THREAD_STATUS = True
+                Thread(target=self.keep_alive, daemon=True).start()
+
+                return True
+        except ConnectionResetError:
+            if not reestablish:
+                print_error_connection_reset(2)
+            return False
+        except TimeoutError:
+            if not reestablish:
+                print_error_timout(2)
+            return False
 
     def keep_alive(self):
-        while True:
-            self.sender.sendto(DataHeader(8, "KEEP ALIVE".encode(), 1).pack_data(), self.address)
+        start = timer()
+        sleep(5)
+        seq_number = 0
+
+        while self.KEEP_ALIVE_THREAD_STATUS:
+            print(f"\r({timer() - start:.0f}s) Keeping connection alive... >> ", end="")
+            self.sender.settimeout(10)
+            self.sender.sendto(DataHeader('K', "KEEP ALIVE".encode(), seq_number).pack_data(), self.address)
+
+            try:
+                receiver_message, receiver_address = self.sender.recvfrom(1024)
+                flags, packet_number, crc, data = open_data(receiver_message)
+
+                if contain_flags(flags, 'S'):
+                    print(
+                        f"\r💻 {format_address(receiver_address)} want to swap mode to sender 📨: SWAP 🏷️")
+                    self.sender.sendto(
+                        DataHeader('SA', "Got your request! Swapping mode to receiver! 📡".encode(), 0).pack_data(),
+                        receiver_address
+                    )
+                    self.KEEP_ALIVE_THREAD_STATUS = False
+                    self.RECEIVER_SWAP_INITIALISATION = True
+                    break
+                if contain_flags(flags, 'KA'):
+                    seq_number += 1
+            except ConnectionResetError:
+                print_error_connection_reset(2)
+                self.try_reestablish_connection()
+                break
+            except TimeoutError:
+                print_error_timout(2)
+                self.try_reestablish_connection()
+                break
             sleep(5)
+
+    def try_reestablish_connection(self):
+        start_reestablish = timer()
+        while timer() - start_reestablish < 30:
+            print(f"\rTrying to reestablish connection ({30 - (timer() - start_reestablish):.0f}s)...", end="")
+            if self.check_aliveness(True):
+                sleep(0.5)
+                print(">> ", end="")
+                return
+            sleep(0.1)
+
+        print("\r\n⚠️ CONNECTION WAS LOST ⚠️")
+        self.KEEP_ALIVE_THREAD_STATUS = False
+        os._exit(0)
