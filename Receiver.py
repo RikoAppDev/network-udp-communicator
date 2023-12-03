@@ -35,6 +35,7 @@ class Receiver:
         ka_start_helper = False
         no_incoming_comm = 0
         sender_not_communicating = 0
+        packet_ack_number = 0
 
         while True:
             try:
@@ -105,51 +106,59 @@ class Receiver:
                             progress_bar = tqdm(unit="B", unit_scale=True)
                     # Basic data
                     else:
-                        correctly_received += 1
-                        received_data += data
+                        if packet_ack_number == seq_number:
+                            packet_ack_number = seq_number + 1
+                            correctly_received += 1
+                            received_data += data
 
-                        if self.show_progress_bar:
-                            progress_bar.update(1)
-
-                        if contain_flags(flags, 'T'):
                             if self.show_progress_bar:
-                                progress_bar.desc = "📡 Receiving message"
-                            else:
-                                print(f"\rPacket {seq_number}. from 💻 {format_address(sender_address)} was accepted 🛂✅")
-                                print(f"\t📦 Packet data size: {len(sender_message)} -", bin(flags), seq_number, crc,
-                                      data)
-                        elif contain_flags(flags, 'F'):
-                            if filename is None:
-                                received_data = b""
-                                filename = data.decode()
-                                if self.show_progress_bar:
-                                    progress_bar.desc = f"📡 Receiving file {filename}"
-                            if not self.show_progress_bar:
-                                print(f"\rPacket {seq_number} from 💻 {format_address(sender_address)} was accepted 🛂✅")
-                                print(f"\t📦 Packet data size: {len(sender_message)} -", bin(flags), seq_number, crc,
-                                      data)
+                                progress_bar.update(1)
 
-                        if contain_flags(flags, 'FQ') or contain_flags(flags, 'TQ'):
-                            self.receiver.sendto(
-                                DataHeader('FA' if contain_flags(flags, 'F') else 'TA',
-                                           f"Got last packet {seq_number}. Thank you! 👌".encode(), 1).pack_data(),
-                                sender_address
-                            )
-                            all_packets = True
-                        else:
-                            self.receiver.sendto(
-                                DataHeader('FA' if contain_flags(flags, 'F') else 'TA',
-                                           f"Got packet {seq_number}. Thank you! 👌".encode(), 1).pack_data(),
-                                sender_address
-                            )
+                            if contain_flags(flags, 'T'):
+                                if self.show_progress_bar:
+                                    progress_bar.desc = "📡 Receiving message"
+                                else:
+                                    print(
+                                        f"\rPacket {seq_number}. from 💻 {format_address(sender_address)} was accepted 🛂✅")
+                                    print(f"\t📦 Packet data size: {len(sender_message)}B -", bin(flags), seq_number,
+                                          crc,
+                                          data)
+                            elif contain_flags(flags, 'F'):
+                                if filename is None:
+                                    received_data = b""
+                                    filename = data.decode()
+                                    if self.show_progress_bar:
+                                        progress_bar.desc = f"📡 Receiving file {filename}"
+                                if not self.show_progress_bar:
+                                    print(
+                                        f"\rPacket {seq_number} from 💻 {format_address(sender_address)} was accepted 🛂✅")
+                                    print(f"\t📦 Packet data size: {len(sender_message)}B -", bin(flags), seq_number,
+                                          crc,
+                                          data)
+
+                            if contain_flags(flags, 'FQ') or contain_flags(flags, 'TQ'):
+                                self.receiver.sendto(
+                                    DataHeader('FA' if contain_flags(flags, 'F') else 'TA',
+                                               f"Got last packet {seq_number}. Thank you! 👌".encode(),
+                                               seq_number).pack_data(),
+                                    sender_address
+                                )
+                                all_packets = True
+                            else:
+                                self.receiver.sendto(
+                                    DataHeader('FA' if contain_flags(flags, 'F') else 'TA',
+                                               f"Got packet {seq_number}. Thank you! 👌".encode(),
+                                               seq_number).pack_data(),
+                                    sender_address
+                                )
                 else:
                     failed_counter += 1
                     if not self.show_progress_bar:
                         print(f"\rPacket {seq_number} from 💻 {format_address(sender_address)} was rejected 🛂⛔")
-                        print(f"\t📦 Packet data size: {len(sender_message)} -", bin(flags), seq_number, crc, data)
+                        print(f"\t📦 Packet data size: {len(sender_message)}B -", bin(flags), seq_number, crc, data)
                     self.receiver.sendto(
                         DataHeader('R', f"Got corrupted packet {seq_number}! It needs to be retransmitted! 🛂".encode(),
-                                   1).pack_data(),
+                                   seq_number).pack_data(),
                         sender_address
                     )
 

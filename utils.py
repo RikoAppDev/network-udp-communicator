@@ -254,7 +254,7 @@ def get_file_save_path():
 
     while True:
         user_input = input(
-            f"🗃️ Enter the directory to save the file (Enter for default: './received_files') >> "
+            f"🗃️ Input the directory to save the file (ENTER key for default: './received_files') >> "
         ).strip()
 
         if user_input == "":

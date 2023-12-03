@@ -27,22 +27,25 @@ class Sender:
             task = handle_send_input_type()
 
             self.KEEP_ALIVE_THREAD_STATUS = False
-            if task == "1":
-                if self.send_text_message():
-                    break
-            elif task == "2":
-                if self.send_file():
-                    break
-            elif task == "3":
-                if self.send_swap_request():
-                    return 'S'
-                else:
-                    break
-            elif task == "4":
-                if self.send_fin_request():
-                    return 'Q'
-                else:
-                    break
+            if not self.RECEIVER_SWAP_INITIALISATION:
+                if task == "1":
+                    if self.send_text_message():
+                        break
+                elif task == "2":
+                    if self.send_file():
+                        break
+                elif task == "3":
+                    if self.send_swap_request():
+                        return 'S'
+                    else:
+                        break
+                elif task == "4":
+                    if self.send_fin_request():
+                        return 'Q'
+                    else:
+                        break
+            else:
+                return 'S'
 
     def send_text_message(self):
         message = input(f"📝 Input message for {format_address(self.address)} 📨 >> ")
@@ -90,6 +93,7 @@ class Sender:
         conn_lost = False
         seq_number = 0
         failed_counter = 0
+        packet_length = 0
 
         while len(data) != 0:
             if filename is not None and not filename_sent:
@@ -97,6 +101,7 @@ class Sender:
             else:
                 fractional_data = data[:fragment_size]
 
+            packet_length = len(fractional_data) + 5
             if filename:
                 self.sender.sendto(
                     DataHeader('F' if seq_number < amount_of_packets - 1 else 'FQ', fractional_data, seq_number)
@@ -125,28 +130,41 @@ class Sender:
 
                     if not show_progress_bar:
                         print(f"\t💻 {format_address(receiver_address)} 🔊 {d.decode()}")
-                        print(f"\t✅ Packet {seq_number} was successfully sent 📭")
+                        print(f"\t✅ Packet {seq_number} with size {packet_length}B was successfully sent 📭")
 
                     seq_number += 1
                 elif contain_flags(flags, 'R'):
                     failed_counter += 1
                     if not show_progress_bar:
                         print(f"\t💻 {format_address(receiver_address)} 🔊 {d.decode()}")
-                        print(f"\t🔁 Packet {seq_number} will be retransmitted 📬")
+                        print(f"\t🔁 Packet {seq_number} with size {packet_length}B will be retransmitted 📬")
             except ConnectionResetError:
                 print_error_connection_reset(2)
-                conn_lost = True
-                break
+                if self.try_reestablish_connection():
+                    conn_lost = False
+                else:
+                    conn_lost = True
+                    break
+            except TimeoutError:
+                print_error_timout(2)
+                if self.try_reestablish_connection():
+                    conn_lost = False
+                else:
+                    conn_lost = True
+                    break
 
-        print(
-            f"\n🧾 Summary:\n"
-            f"\t📦 All sent packets: {seq_number + failed_counter}\n"
-            f"\t🔁 Retransmitted packets: {failed_counter}\n"
-            f"\t📏 Size of the data: {data_length}B"
-        )
+        if not conn_lost:
+            print(
+                f"\n🧾 Summary:\n"
+                f"\t📦 All sent packets: {seq_number + failed_counter}\n"
+                f"\t🔁 Retransmitted packets: {failed_counter}\n"
+                f"\t📏 Size of the data: {data_length}B"
+            )
 
-        self.KEEP_ALIVE_THREAD_STATUS = True
-        Thread(target=self.keep_alive, daemon=True).start()
+            self.KEEP_ALIVE_THREAD_STATUS = True
+            Thread(target=self.keep_alive, daemon=True).start()
+        else:
+            print("⚠️ Communication was unsuccessful due to connection loss ⚠️\n\t- All transmitted data was lost.")
 
         return conn_lost
 
@@ -256,7 +274,8 @@ class Sender:
             if self.check_aliveness(True):
                 sleep(0.5)
                 print(">> ", end="")
-                return
+                self.KEEP_ALIVE_THREAD_STATUS = False
+                return True
             sleep(0.1)
 
         print("\r\n⚠️ CONNECTION WAS LOST ⚠️")
