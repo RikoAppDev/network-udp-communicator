@@ -24,7 +24,10 @@ class Sender:
 
     def send(self):
         while True:
-            task = handle_send_input_type()
+            if not self.RECEIVER_SWAP_INITIALISATION:
+                task = handle_send_input_type()
+            else:
+                task = "S"
 
             self.KEEP_ALIVE_THREAD_STATUS = False
             if not self.RECEIVER_SWAP_INITIALISATION:
@@ -96,7 +99,6 @@ class Sender:
         conn_lost = False
         seq_number = 0
         failed_counter = 0
-        packet_length = 0
 
         while len(data) != 0:
             if filename is not None and not filename_sent:
@@ -136,6 +138,13 @@ class Sender:
                         print(f"\t✅ Packet {seq_number} with size {packet_length}B was successfully sent 📭")
 
                     seq_number += 1
+                    if contain_flags(flags, 'S'):
+                        self.sender.sendto(
+                            DataHeader('SA', "Got your request! Swapping mode to receiver! 📡".encode(), 0).pack_data(),
+                            receiver_address
+                        )
+                        self.KEEP_ALIVE_THREAD_STATUS = False
+                        self.RECEIVER_SWAP_INITIALISATION = True
                 elif contain_flags(flags, 'R'):
                     failed_counter += 1
                     if not show_progress_bar:
@@ -164,8 +173,11 @@ class Sender:
                 f"\t📏 Size of the data: {data_length}B"
             )
 
-            self.KEEP_ALIVE_THREAD_STATUS = True
-            Thread(target=self.keep_alive, daemon=True).start()
+            if self.RECEIVER_SWAP_INITIALISATION:
+                print(f"\n💻 {format_address(receiver_address)} want to swap mode to sender 📨: SWAP 🏷️")
+            else:
+                self.KEEP_ALIVE_THREAD_STATUS = True
+                Thread(target=self.keep_alive, daemon=True).start()
         else:
             print("⚠️ Communication was unsuccessful due to connection loss ⚠️\n\t- All transmitted data was lost.")
 
@@ -249,8 +261,7 @@ class Sender:
                 flags, packet_number, crc, data = open_data(receiver_message)
 
                 if contain_flags(flags, 'S'):
-                    print(
-                        f"\r💻 {format_address(receiver_address)} want to swap mode to sender 📨: SWAP 🏷️")
+                    print(f"\r💻 {format_address(receiver_address)} want to swap mode to sender 📨: SWAP 🏷️")
                     print("Click enter for RECEIVER setup ;)", end="")
                     self.sender.sendto(
                         DataHeader('SA', "Got your request! Swapping mode to receiver! 📡".encode(), 0).pack_data(),

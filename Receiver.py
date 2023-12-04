@@ -135,12 +135,20 @@ class Receiver:
                                           data)
 
                             if contain_flags(flags, 'FQ') or contain_flags(flags, 'TQ'):
-                                self.receiver.sendto(
-                                    DataHeader('FA' if contain_flags(flags, 'F') else 'TA',
-                                               f"Got last packet {seq_number}. Thank you! 👌".encode(),
-                                               seq_number).pack_data(),
-                                    sender_address
-                                )
+                                if self.SWAP_INITIALISATION:
+                                    self.receiver.sendto(
+                                        DataHeader('FAS' if contain_flags(flags, 'F') else 'TAS',
+                                                   f"Got last packet {seq_number}. Thank you! 👌".encode(),
+                                                   seq_number).pack_data(),
+                                        sender_address
+                                    )
+                                else:
+                                    self.receiver.sendto(
+                                        DataHeader('FA' if contain_flags(flags, 'F') else 'TA',
+                                                   f"Got last packet {seq_number}. Thank you! 👌".encode(),
+                                                   seq_number).pack_data(),
+                                        sender_address
+                                    )
                                 all_packets = True
                             else:
                                 self.receiver.sendto(
