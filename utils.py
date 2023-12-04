@@ -70,7 +70,7 @@ def handle_send_input_type():
             "\t4️⃣ End communication 💔\n"
             ">> "
         ).strip()
-        if task in ["1", "2", "3", "4"]:
+        if task in ["1", "2", "3", "4", ""]:
             return task
         else:
             print(f"‼️ Error ‼️\n\t- Unsupported task")

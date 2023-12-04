@@ -67,7 +67,6 @@ class Receiver:
                         self.receiver.sendto(
                             DataHeader('KA' if not self.SWAP_INITIALISATION else 'KAS', "KA-ACK".encode(),
                                        0).pack_data(), sender_address)
-                        self.SWAP_INITIALISATION = False
                     # FIN communication
                     elif match_flags(flags, 'Q'):
                         print(f"\r💻 {format_address(sender_address)} want to end communication: {data.decode()} 🏷️")
@@ -79,7 +78,6 @@ class Receiver:
                         return 'Q', sender_address
                     # SWAP modes ACK from SENDER
                     elif match_flags(flags, 'SA'):
-                        self.SWAP_INITIALISATION = False
                         print(f"\r💻 {format_address(sender_address)} 🔊 {data.decode()}")
 
                         self.receiver.close()
@@ -181,6 +179,7 @@ class Receiver:
                     failed_counter = 0
                     received_data = b""
                     start = timer()
+                    packet_ack_number = 0
 
             except TimeoutError:
                 if not connected:

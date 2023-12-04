@@ -44,6 +44,9 @@ class Sender:
                         return 'Q'
                     else:
                         break
+                else:
+                    self.KEEP_ALIVE_THREAD_STATUS = True
+                    print(f"‼️ Error ‼️\n\t- Unsupported task")
             else:
                 return 'S'
 
@@ -248,6 +251,7 @@ class Sender:
                 if contain_flags(flags, 'S'):
                     print(
                         f"\r💻 {format_address(receiver_address)} want to swap mode to sender 📨: SWAP 🏷️")
+                    print("Click enter for RECEIVER setup ;)", end="")
                     self.sender.sendto(
                         DataHeader('SA', "Got your request! Swapping mode to receiver! 📡".encode(), 0).pack_data(),
                         receiver_address
