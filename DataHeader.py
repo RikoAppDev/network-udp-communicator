@@ -7,7 +7,7 @@ T (1 = Text message)
 F (1 = File transfer)
 A (1 = Acknowledge packet)
 R (1 = Retransmit packet)
-Q (1 = Fin comm)
+Q (1 = Quit/Fin comm)
 S (1 = Swap modes)
 K (1 = Keep alive)
 -----------------------------------------------

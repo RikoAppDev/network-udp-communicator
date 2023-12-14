@@ -1,3 +1,4 @@
+import hashlib
 from socket import *
 from tqdm import tqdm
 
@@ -176,6 +177,18 @@ class Receiver:
                         print(f'\nStreaming data into {filename} ...', end="")
 
                     if contain_flags(flags, 'T'):
+                        received_md5 = received_data.decode().split("___")[1]
+                        print(f"\nReceived MD5: {received_md5}")
+                        received_message = received_data.decode().split("___")[0]
+                        print(f"Received message: {received_message}")
+                        new_md5 = hashlib.md5(received_message.encode()).hexdigest()
+                        print(f"New MD5: {new_md5}")
+
+                        if received_md5 == new_md5:
+                            print("MD5 matches ✅")
+                        else:
+                            print("MD5 not matches ❌")
+
                         print(f"\n📄 Received message is: {received_data.decode()}")
                         print(f"📏 Message size: {len(received_data)}B \n")
                     elif contain_flags(flags, 'F'):

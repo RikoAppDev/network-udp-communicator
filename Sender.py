@@ -1,3 +1,4 @@
+import hashlib
 import math
 import random
 import socket
@@ -70,6 +71,10 @@ class Sender:
         fragment_size = handle_fragment_size_input()
         error_sim = handle_error_sim_input()
         show_progress_bar = handle_show_progress()
+
+        if filename is None:
+            md5 = hashlib.md5(data.encode()).hexdigest()
+            data = data + "___" + md5
 
         amount_of_packets = math.ceil(len(data) / fragment_size)
 
